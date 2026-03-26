@@ -1,213 +1,190 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, Copy, Check, Settings, Home as HomeIcon, Zap, Package } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import { nanoid } from "nanoid";
 
-export default function Home() {
-  const { session, logout, isLoggedIn } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home' | 'generator' | 'settings'>('home');
-  const [generatedData, setGeneratedData] = useState<string>('');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [usageCount, setUsageCount] = useState(0);
+interface HomeProps {
+  onLogout: () => void;
+}
 
-  if (!isLoggedIn || !session) {
-    return null;
-  }
+interface Session {
+  key: string;
+  level: "BASIC" | "PRO" | "DEV";
+  limit: number;
+  duration: number;
+  packages: number;
+  hwid: string;
+  usage: number;
+}
 
-  const keyLimit = session.keyData.limit;
-  const usagePercentage = (usageCount / keyLimit) * 100;
+export default function Home({ onLogout }: HomeProps) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [tab, setTab] = useState<"inicio" | "gerar" | "config">("inicio");
+  const [generatedData, setGeneratedData] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  // Gerar dados aleatórios (simular gerador)
-  const generateRandomData = () => {
-    const timestamp = new Date().toISOString();
-    const randomId = Math.random().toString(36).substr(2, 9).toUpperCase();
-    const data = `${session.activeKey}_${randomId}_${timestamp}`;
+  useEffect(() => {
+    const sessionData = localStorage.getItem("auth_session");
+    if (sessionData) {
+      setSession(JSON.parse(sessionData));
+    }
+  }, []);
+
+  const handleGenerate = () => {
+    if (!session) return;
+
+    if (session.usage >= session.limit) {
+      alert("Limite de requisições atingido!");
+      return;
+    }
+
+    const data = `${session.key}_${nanoid(8)}_${new Date().toISOString()}`;
     setGeneratedData(data);
 
-    // Incrementar uso
-    const newCount = Math.min(usageCount + 1, keyLimit);
-    setUsageCount(newCount);
-    localStorage.setItem(`usage_${session.activeKey}`, newCount.toString());
-
-    toast.success('Dados gerados com sucesso!');
+    const updatedSession = { ...session, usage: session.usage + 1 };
+    setSession(updatedSession);
+    localStorage.setItem("auth_session", JSON.stringify(updatedSession));
   };
 
-  // Copiar para clipboard
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId('generated');
-      setTimeout(() => setCopiedId(null), 2000);
-      toast.success('Copiado para a área de transferência!');
-    } catch (err) {
-      toast.error('Erro ao copiar');
-    }
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedData);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // Restaurar uso do localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(`usage_${session.activeKey}`);
-    if (saved) {
-      setUsageCount(parseInt(saved, 10));
-    }
-  }, [session.activeKey]);
-
-  const handleLogout = () => {
-    logout();
-    toast.success('Desconectado com sucesso!');
+  const handleLogoutClick = () => {
+    localStorage.removeItem("auth_session");
+    onLogout();
   };
+
+  if (!session) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-200 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-gray-100 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-screen max-h-screen md:max-h-[932px] relative">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-br from-[#1a56e8] to-[#1240c0] px-5 pt-5 pb-12 flex-shrink-0">
-          <div className="flex items-center justify-between mb-5">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6 text-white">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-900 to-gray-700 flex items-center justify-center text-2xl font-black text-orange-400 border-2 border-white/20">
-                🔐
-              </div>
+              <div className="text-3xl">🔐</div>
               <div>
-                <p className="text-white font-bold text-lg leading-tight">{session.keyLevel}</p>
-                <p className="text-white/65 text-xs">Plano {session.keyLevel}</p>
+                <div className="text-xl font-bold">{session.level}</div>
+                <div className="text-xs text-blue-100">Plano {session.level}</div>
               </div>
             </div>
             <button
-              onClick={handleLogout}
-              className="bg-white/15 hover:bg-white/25 active:scale-95 border-0 cursor-pointer w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-100"
+              onClick={handleLogoutClick}
+              className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded-lg text-xs font-bold transition-all"
             >
-              <LogOut className="w-5 h-5 text-white" />
+              Desconectar
             </button>
           </div>
 
-          {/* Limit Bar */}
-          <div className="bg-white/10 rounded-2xl p-3 mb-3">
-            <div className="flex justify-between items-center mb-1">
-              <p className="text-white/80 text-xs font-semibold uppercase tracking-wider">Limite</p>
-              <p className="text-white font-bold text-sm">{usageCount} / {keyLimit}</p>
-            </div>
-            <div className="bg-white/20 rounded-full h-1 overflow-hidden">
+          {/* Progress Bar */}
+          <div className="mb-4">
+            <div className="text-xs font-semibold mb-1">LIMITE</div>
+            <div className="w-full bg-blue-900/50 rounded-full h-2 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-500"
-                style={{ width: `${usagePercentage}%` }}
+                className="bg-green-400 h-full transition-all"
+                style={{ width: `${(session.usage / session.limit) * 100}%` }}
               />
+            </div>
+            <div className="text-xs text-blue-100 mt-1">
+              {session.usage} / {session.limit}
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white/13 border border-white/10 rounded-2xl p-3 cursor-pointer hover:bg-white/20 active:scale-95 transition-all">
-              <p className="text-white/75 text-xs flex items-center gap-1 mb-1 font-semibold uppercase tracking-wide">
-                <Zap className="w-3 h-3" /> Usado
-              </p>
-              <p className="text-white font-black text-2xl">{usageCount}</p>
-              <p className="text-white/60 text-xs mt-1">Requisições</p>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-blue-500/30 rounded-lg p-3">
+              <div className="text-xs text-blue-100">USADO</div>
+              <div className="text-2xl font-bold">{session.usage}</div>
+              <div className="text-xs text-blue-100">Requisições</div>
             </div>
-            <div className="bg-white/13 border border-white/10 rounded-2xl p-3 cursor-pointer hover:bg-white/20 active:scale-95 transition-all">
-              <p className="text-white/75 text-xs flex items-center gap-1 mb-1 font-semibold uppercase tracking-wide">
-                <Package className="w-3 h-3" /> Pacotes
-              </p>
-              <p className="text-white font-black text-2xl">{session.keyData.packages}</p>
-              <p className="text-white/60 text-xs mt-1">Disponíveis</p>
+            <div className="bg-blue-500/30 rounded-lg p-3">
+              <div className="text-xs text-blue-100">PACOTES</div>
+              <div className="text-2xl font-bold">{session.packages}</div>
+              <div className="text-xs text-blue-100">Disponíveis</div>
             </div>
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 pb-24">
-          {/* Home Tab */}
-          {activeTab === 'home' && (
-            <div className="p-4 space-y-4">
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h2 className="text-gray-900 font-bold text-base mb-3">Bem-vindo!</h2>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Você está usando a chave <span className="font-mono font-bold text-blue-600">{session.activeKey}</span> no nível <span className="font-bold text-blue-600">{session.keyLevel}</span>.
-                </p>
-              </div>
+        {/* Content */}
+        <div className="p-6">
+          {tab === "inicio" && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Bem-vindo!</h2>
+              <p className="text-gray-600 mb-6">
+                Você está usando a chave <span className="font-bold text-blue-600">{session.key}</span> no nível <span className="font-bold text-blue-600">{session.level}</span>.
+              </p>
 
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h3 className="text-gray-900 font-bold text-sm mb-2">Informações da Chave</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Limite:</span>
-                    <span className="font-bold text-gray-900">{keyLimit}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Duração:</span>
-                    <span className="font-bold text-gray-900">{session.keyData.durationDays === -1 ? 'Ilimitado' : `${session.keyData.durationDays} dias`}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Nível:</span>
-                    <span className="font-bold text-gray-900">{session.keyLevel}</span>
-                  </div>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Limite:</div>
+                  <div className="text-lg font-bold text-gray-800">{session.limit}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Duração:</div>
+                  <div className="text-lg font-bold text-gray-800">{session.duration} dias</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Nível:</div>
+                  <div className="text-lg font-bold text-gray-800">{session.level}</div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Generator Tab */}
-          {activeTab === 'generator' && (
-            <div className="p-4 space-y-4">
+          {tab === "gerar" && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Gerador</h2>
               <button
-                onClick={generateRandomData}
-                disabled={usageCount >= keyLimit}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all duration-100 cursor-pointer border-0"
+                onClick={handleGenerate}
+                className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg mb-4 transition-all"
               >
-                {usageCount >= keyLimit ? 'Limite atingido' : 'Gerar Dados'}
+                Gerar Dados
               </button>
 
               {generatedData && (
-                <div className="bg-white rounded-2xl shadow-sm p-4">
-                  <h3 className="text-gray-900 font-bold text-sm mb-3">Dados Gerados</h3>
-                  <div className="bg-gray-50 rounded-xl p-3 mb-3 break-all font-mono text-xs text-gray-700">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Dados Gerados:</div>
+                  <div className="bg-white border border-gray-300 rounded p-3 mb-3 break-all text-sm font-mono text-gray-800">
                     {generatedData}
                   </div>
                   <button
-                    onClick={() => copyToClipboard(generatedData)}
-                    className="w-full bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold py-2 rounded-xl transition-all duration-100 cursor-pointer border-0 flex items-center justify-center gap-2"
+                    onClick={handleCopy}
+                    className={`w-full py-2 rounded-lg font-bold transition-all ${
+                      copied
+                        ? "bg-green-500 text-white"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
                   >
-                    {copiedId === 'generated' ? (
-                      <>
-                        <Check className="w-4 h-4" /> Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" /> Copiar
-                      </>
-                    )}
+                    {copied ? "✓ Copiado!" : "Copiar"}
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
-            <div className="p-4 space-y-4">
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h3 className="text-gray-900 font-bold text-base mb-4">Configurações</h3>
-
-                <div className="space-y-3">
-                  <div className="pb-3 border-b border-gray-200">
-                    <p className="text-gray-600 text-sm font-semibold mb-1">Chave Ativa</p>
-                    <p className="text-gray-900 font-mono text-sm">{session.activeKey}</p>
-                  </div>
-
-                  <div className="pb-3 border-b border-gray-200">
-                    <p className="text-gray-600 text-sm font-semibold mb-1">Nível de Acesso</p>
-                    <p className="text-gray-900 font-bold text-sm">{session.keyLevel}</p>
-                  </div>
-
-                  <div className="pb-3">
-                    <p className="text-gray-600 text-sm font-semibold mb-1">Limite de Requisições</p>
-                    <p className="text-gray-900 font-bold text-sm">{keyLimit}</p>
-                  </div>
+          {tab === "config" && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Configurações</h2>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Chave Ativa</div>
+                  <div className="text-gray-800 font-mono text-sm">{session.key}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Nível de Acesso</div>
+                  <div className="text-gray-800 font-bold">{session.level}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-500">Limite de Requisições</div>
+                  <div className="text-gray-800 font-bold">{session.limit}</div>
                 </div>
               </div>
 
               <button
-                onClick={handleLogout}
-                className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold py-3 rounded-2xl transition-all duration-100 cursor-pointer border-0"
+                onClick={handleLogoutClick}
+                className="w-full mt-6 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg transition-all"
               >
                 Desconectar
               </button>
@@ -215,34 +192,37 @@ export default function Home() {
           )}
         </div>
 
-        {/* Bottom Navigation */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 w-full">
+        {/* Tabs */}
+        <div className="flex border-t border-gray-200">
           <button
-            onClick={() => setActiveTab('home')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
-              activeTab === 'home' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+            onClick={() => setTab("inicio")}
+            className={`flex-1 py-3 text-center font-semibold transition-all ${
+              tab === "inicio"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-600 hover:text-gray-800"
             }`}
           >
-            <HomeIcon className="w-5 h-5" />
-            <span className="text-xs font-semibold">Início</span>
+            🏠 Início
           </button>
           <button
-            onClick={() => setActiveTab('generator')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
-              activeTab === 'generator' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+            onClick={() => setTab("gerar")}
+            className={`flex-1 py-3 text-center font-semibold transition-all ${
+              tab === "gerar"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-600 hover:text-gray-800"
             }`}
           >
-            <Zap className="w-5 h-5" />
-            <span className="text-xs font-semibold">Gerar</span>
+            ⚡ Gerar
           </button>
           <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
-              activeTab === 'settings' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+            onClick={() => setTab("config")}
+            className={`flex-1 py-3 text-center font-semibold transition-all ${
+              tab === "config"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-600 hover:text-gray-800"
             }`}
           >
-            <Settings className="w-5 h-5" />
-            <span className="text-xs font-semibold">Config</span>
+            ⚙️ Config
           </button>
         </div>
       </div>

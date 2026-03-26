@@ -1,89 +1,75 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { useState } from "react";
+import { findKey, getHWID } from "../data/keys";
 
-export default function Login() {
-  const { login } = useAuth();
-  const [keyInput, setKeyInput] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+interface LoginProps {
+  onLogin: () => void;
+}
 
-  // Gerar HWID simulado (em produção, seria mais sofisticado)
-  const generateHWID = () => {
-    return `HWID_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-  };
+export default function Login({ onLogin }: LoginProps) {
+  const [key, setKey] = useState("");
+  const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      const hwid = generateHWID();
-      const result = await login(keyInput, hwid);
-
-      if (!result.success) {
-        setError(result.message);
-        setKeyInput('');
-      }
-    } catch (err) {
-      setError('Erro ao fazer login. Tente novamente.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+  const handleLogin = () => {
+    if (!key.trim()) {
+      setError("Digite sua chave!");
+      return;
     }
+
+    const foundKey = findKey(key);
+    if (!foundKey) {
+      setError("Key inválida ou não encontrada!");
+      return;
+    }
+
+    const hwid = getHWID();
+    localStorage.setItem("auth_session", JSON.stringify({
+      key: foundKey.key,
+      level: foundKey.level,
+      limit: foundKey.limit,
+      duration: foundKey.duration,
+      packages: foundKey.packages,
+      hwid,
+      usage: 0,
+    }));
+
+    setError("");
+    onLogin();
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-[#1a56e8] to-[#1240c0] flex items-center justify-center p-6 z-50">
-      <div className="w-full max-w-sm">
-        <div className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 p-8">
-          {/* Logo */}
-          <div className="text-5xl mb-6 text-center">🔐</div>
-
-          {/* Title */}
-          <h1 className="text-2xl font-black text-white text-center mb-2">
-            CentralAuth
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-sm text-white/80 text-center mb-8">
-            Insira sua chave de acesso
-          </p>
-
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="text"
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
-              placeholder="Digite sua chave"
-              className="w-full px-4 py-4 rounded-2xl border-0 bg-white text-center text-gray-900 font-semibold text-base placeholder-gray-400 outline-none focus:ring-2 focus:ring-green-400 transition-all uppercase"
-              disabled={isLoading}
-            />
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-4 rounded-2xl border-0 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold text-base cursor-pointer transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isLoading ? 'Validando...' : 'Acessar'}
-            </button>
-          </form>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mt-4 p-3 bg-red-500/20 border border-red-400/50 rounded-lg">
-              <p className="text-red-200 text-sm font-semibold text-center">{error}</p>
-            </div>
-          )}
-
-          {/* Info Text */}
-          <p className="text-xs text-white/60 text-center mt-6">
-            Sua chave é vinculada ao seu dispositivo (HWID)
-          </p>
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-600 to-blue-800">
+      <div className="bg-blue-500/20 backdrop-blur-md rounded-3xl p-8 w-96 border border-blue-400/30 shadow-2xl">
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-3xl font-bold text-white mb-2">CentralAuth</h1>
+          <p className="text-blue-100">Insira sua chave de acesso</p>
         </div>
+
+        <input
+          type="text"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleLogin()}
+          placeholder="DIGITE SUA CHAVE"
+          className="w-full px-4 py-3 rounded-lg bg-white text-gray-800 placeholder-gray-400 font-semibold mb-4 focus:outline-none focus:ring-2 focus:ring-green-400"
+        />
+
+        <button
+          onClick={handleLogin}
+          className="w-full px-4 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold transition-all mb-4 border-2 border-dashed border-green-300"
+        >
+          Acessar
+        </button>
+
+        {error && (
+          <div className="bg-red-500/30 border border-red-400 text-red-100 px-4 py-2 rounded-lg text-center text-sm">
+            {error}
+          </div>
+        )}
+
+        <p className="text-blue-100 text-xs text-center mt-4">
+          Sua chave é vinculada ao seu dispositivo (HWID)
+        </p>
       </div>
     </div>
   );
