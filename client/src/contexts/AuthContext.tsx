@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { KeyData, keysDatabase } from '@/data/keys';
+import { KeyData, keysDatabase } from '../data/keys';
 
 interface SessionData {
   activeKey: string;
